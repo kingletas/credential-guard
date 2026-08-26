@@ -47,7 +47,7 @@ check "a clean tree passes" "$?" "0"
 # --- history: a key added and later removed is STILL in the repository ----
 # Not AKIAIOSFODNN7EXAMPLE: that is AWS's own documented example key and the
 # scanner treats it as a placeholder, correctly. This is a shape it refuses.
-printf 'api_key = "sk_live_9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"  \n' > "$repo/leak.py"
+printf 'api_key = "sk_live_9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"  \n' > "$repo/leak.py"  # pragma: allowlist secret
 git -C "$repo" add -A && git -C "$repo" commit -qm "oops"
 printf 'api_key = ""\n' > "$repo/leak.py"
 git -C "$repo" add -A && git -C "$repo" commit -qm "removed it"
