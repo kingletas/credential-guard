@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#
+# install -- put credential-guard on your PATH.
+#
+# Usage:
+#   scripts/install [PREFIX]     default: ~/bin
+#
+# Called by `make install`. The scanner is installed into <prefix>/
+# credential-guard.d/, which is where the command looks for it; `credential-
+# guard install <repo>` then vendors a copy from there into a repository,
+# because a contributor who clones that repo does not have your ~/bin.
+
+set -euo pipefail
+usage() { sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+[[ "${1:-}" =~ ^(-h|--help)$ ]] && { usage; exit 0; }
+
+here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+prefix="${1:-$HOME/bin}"
+[[ -d "$prefix" ]] || { echo "install: no such directory: $prefix" >&2; exit 2; }
+
+install -m 755 "$here/bin/credential-guard" "$prefix/credential-guard"
+install -d -m 755 "$prefix/credential-guard.d"
+install -m 755 "$here/bin/check_credentials.py" "$prefix/credential-guard.d/check_credentials.py"
+echo "installed credential-guard -> $prefix"
+case ":$PATH:" in *":$prefix:"*) ;; *) echo "note: $prefix is not on your PATH" >&2 ;; esac
+"$prefix/credential-guard" self-test >/dev/null \
+  || { echo "install: the installed copy fails its own self-test" >&2; exit 1; }
+echo "scanner reachable from the installed copy"
