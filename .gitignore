@@ -1,0 +1,10 @@
+# A repo-local ignore file is load-bearing. Git's core.excludesFile is a global
+# list, and on some machines it excludes *.sh and *.py -- so a new repository
+# silently loses its own source. These negations re-include them.
+!*.sh
+!*.py
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/

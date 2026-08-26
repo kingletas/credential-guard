@@ -1,0 +1,39 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-yaml
+      # Not `detect-private-key`: this repository *is* a private-key detector,
+      # and the scanner plus its self-test contain every marker such a hook
+      # searches for. Running it here would fail every commit forever.
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      # The tool checks itself. It is the only repository here that can use its
+      # own canonical copy rather than a vendored one -- and it must exclude the
+      # scanner and its tests, which contain specimen keys as data.
+      - id: check-credentials
+        name: check for committed credentials
+        entry: python3 bin/check_credentials.py
+        language: system
+        pass_filenames: true
+        exclude: ^(bin/check_credentials\.py|tests/)
+
+      - id: shellcheck
+        name: shellcheck
+        entry: bash -c 'command -v shellcheck >/dev/null 2>&1 || exit 0; exec shellcheck bin/credential-guard tests/run.sh'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: tests
+        name: the end-to-end tests
+        entry: tests/run.sh
+        language: system
+        pass_filenames: false
+        always_run: true

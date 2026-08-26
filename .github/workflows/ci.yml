@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.9", "3.11", "3.13"]
+        include:
+          - os: macos-latest
+            python-version: "3.13"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Python 3.9 is in the matrix on purpose. A pre-commit hook has to run on
+      # whatever interpreter a contributor already has, and a scanner that needs
+      # a recent Python is a scanner that gets skipped on the machine where it
+      # matters. There are no third-party imports for the same reason.
+      - name: The scanner's own patterns
+        run: python3 bin/check_credentials.py --self-test
+
+      - name: End to end
+        run: tests/run.sh
+
+  lint:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck bin/credential-guard tests/run.sh
+
+  dogfood:
+    name: Scan this repository's own history
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # The scanner and its tests hold specimen keys as data, so a naive history
+      # scan of this repository refuses itself. `--self` is not a thing; instead
+      # confirm the tool RUNS over history and reports, which is the property
+      # that breaks silently when the blob-walking changes.
+      - name: History scan produces a report
+        run: |
+          set -uo pipefail
+          bin/credential-guard history . > report.txt 2>&1
+          status=$?
+          grep -q "blob(s)" report.txt || { echo "history scan produced no blob count"; exit 1; }
+          echo "history scan walked the repository (exit $status)"
