@@ -9,6 +9,11 @@ Usage:
     python scripts/check_credentials.py FILE [FILE ...]
     python scripts/check_credentials.py --self-test
 
+Exit status is 0 only when every file given was opened and none looked like a
+credential. It is 1 when something was found or a file could not be read, and 2
+when no file was given or not one of them could be opened -- because a scanner
+that exits 0 having read nothing reports an unexamined tree as a clean one.
+
 Mark a genuine false positive with a trailing ``pragma: allowlist secret``
 comment on the offending line. Do that sparingly and never to silence a real
 key you intend to rotate later.
@@ -18,6 +23,7 @@ from __future__ import annotations
 
 import re
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # Any copy of this scanner would flag itself: it contains the patterns it looks
@@ -199,16 +205,32 @@ def _read(path: Path) -> tuple[str | None, list[str]]:
         return None, [f"{name}: not scanned ({error.strerror})"]
 
 
-def scan_file(path: Path) -> list[str]:
+@dataclass
+class ScanResult:
+    """What one file produced, and whether the scanner got to look at it."""
+
+    findings: list[str] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
+    opened: bool = True
+
+
+def scan_file(path: Path) -> ScanResult:
+    """Judge one file. A finding is a suspected credential; a problem is a file
+    that could not be read, which is a different thing and is reported as one."""
     if path.name == SELF_NAME:
-        return []
+        return ScanResult()
     name = path.as_posix()
     if FORBIDDEN_NAMES.search(name) and not FORBIDDEN_EXCEPTIONS.search(name):
-        return [f"{name}: this file should never be committed"]
+        return ScanResult(findings=[f"{name}: this file should never be committed"])
     text, problems = _read(path)
-    if text is None or SELF_MARKER in text:
-        return problems
-    return scan_text(name, text)
+    if text is None:
+        # A binary file was opened and has nothing a text scanner can say about
+        # it. A file that produced a problem was never read at all, and does not
+        # count towards the tally deciding whether this run looked at anything.
+        return ScanResult(problems=problems, opened=not problems)
+    if SELF_MARKER in text:
+        return ScanResult()
+    return ScanResult(findings=scan_text(name, text))
 
 
 def _self_test() -> int:
@@ -263,18 +285,46 @@ def _self_test() -> int:
 def main(argv: list[str]) -> int:
     if "--self-test" in argv:
         return _self_test()
-    findings = [f for arg in argv for f in scan_file(Path(arg))]
-    if not findings:
-        return 0
-    print("Refusing to commit: this looks like a credential.\n")
-    for finding in findings:
-        print(f"  {finding}")
-    print(
-        "\nIf the key is real: remove it, then rotate it — a commit is not the"
-        "\nonly place it has been. If it is a false positive, append"
-        "\n`# pragma: allowlist secret` to that line."
-    )
-    return 1
+    # Exit 0 has to mean "opened every file and found nothing". A run that
+    # opened none of them is not a clean result, it is an absent one, and
+    # reporting it as clean is how an unscanned tree gets called cleared.
+    if not argv:
+        print(f"{SELF_NAME}: no files given; nothing was scanned", file=sys.stderr)
+        return 2
+    findings: list[str] = []
+    problems: list[str] = []
+    opened = 0
+    for arg in argv:
+        result = scan_file(Path(arg))
+        findings.extend(result.findings)
+        problems.extend(result.problems)
+        opened += result.opened
+
+    # A file that could not be read is not a credential and is never reported as
+    # one. It is the other half of the same duty: an unreadable file is a file
+    # this run cannot clear, so it fails rather than passing quietly.
+    if problems:
+        print(
+            f"{SELF_NAME}: {len(problems)} of {len(argv)} file(s) could not be scanned.",
+            file=sys.stderr,
+        )
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        print(file=sys.stderr)
+    if opened == 0:
+        print(f"{SELF_NAME}: nothing was scanned, so nothing is cleared.", file=sys.stderr)
+        return 2
+
+    if findings:
+        print("Refusing to commit: this looks like a credential.\n")
+        for finding in findings:
+            print(f"  {finding}")
+        print(
+            "\nIf the key is real: remove it, then rotate it — a commit is not the"
+            "\nonly place it has been. If it is a false positive, append"
+            "\n`# pragma: allowlist secret` to that line."
+        )
+    return 1 if findings or problems else 0
 
 
 if __name__ == "__main__":

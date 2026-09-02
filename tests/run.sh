@@ -24,6 +24,8 @@ check() { if [[ "$2" == "$3" ]]; then ok "$1"; else bad "$1 (got '$2', wanted '$
 want_file() { if [[ -f "$1" ]]; then ok "$2"; else bad "$2"; fi; }
 want_exec() { if [[ -x "$1" ]]; then ok "$2"; else bad "$2"; fi; }
 want_grep() { if grep -q "$1" "$2"; then ok "$3"; else bad "$3"; fi; }
+saw()     { if grep -q "$1" <<<"$2"; then ok "$3"; else bad "$3"; fi; }
+saw_not() { if grep -q "$1" <<<"$2"; then bad "$3"; else ok "$3"; fi; }
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -75,6 +77,56 @@ printf '#!/bin/sh\necho mine\n' > "$repo2/.git/hooks/pre-commit"
 chmod +x "$repo2/.git/hooks/pre-commit"
 "$GUARD" install "$repo2" >/dev/null 2>&1
 want_grep "echo mine" "$repo2/.git/hooks/pre-commit" "an existing pre-commit hook is left alone"
+
+# --- a subdirectory scan resolves paths against the repository root -------
+# `git ls-files --full-name` prints repo-root-relative paths. Joining those onto
+# the path argument doubles the prefix, so every file is handed to the scanner
+# under a path that is not there -- and the tree is reported without being read.
+repo3="$work/repo3"
+mkdir -p "$repo3/module/Api" "$repo3/module/empty-untracked"
+git -C "$repo3" init -q
+git -C "$repo3" config user.email t@example.com
+git -C "$repo3" config user.name Test
+printf 'name = "hello"\n' > "$repo3/module/Api/Clean.php"
+printf 'name = "hello"\n' > "$repo3/top.php"
+git -C "$repo3" add -A && git -C "$repo3" commit -qm "clean"
+
+out="$("$GUARD" scan "$repo3/module" 2>&1)"; rc=$?
+check   "a clean subdirectory scan passes" "$rc" "0"
+saw     "scanning 1 file" "$out" "a subdirectory scan lists only that subdirectory"
+saw_not "not scanned"     "$out" "a subdirectory scan opens every file it listed"
+
+out="$(cd "$repo3/module" && "$GUARD" scan . 2>&1)"; rc=$?
+check   "scanning . from inside a subdirectory passes" "$rc" "0"
+saw_not "not scanned" "$out" "and opens every file it listed"
+
+# The scan has to be reading, not merely failing to error.
+printf 'api_key = "sk_live_9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"\n' > "$repo3/module/Api/Leak.php"  # pragma: allowlist secret
+git -C "$repo3" add -A && git -C "$repo3" commit -qm "a leak in a subdirectory"
+out="$("$GUARD" scan "$repo3/module" 2>&1)"; rc=$?
+check   "a leak inside a subdirectory is caught" "$rc" "1"
+saw     "module/Api/Leak.php" "$out" "the finding names the file"
+saw_not "module/module"       "$out" "the repository-relative prefix is not doubled"
+
+# --- nothing scanned is a failure, never a pass ---------------------------
+"$GUARD" scan "$repo3/module/empty-untracked" >/dev/null 2>&1
+check "a directory holding no tracked file fails rather than passing" "$?" "1"
+
+"$GUARD" scan "$repo3/no-such-directory" >/dev/null 2>&1
+check "a target that does not exist fails" "$?" "2"
+
+SCANNER="$HERE/bin/check_credentials.py"
+python3 "$SCANNER" >/dev/null 2>&1
+check "the scanner given no file at all fails" "$?" "2"
+
+out="$(python3 "$SCANNER" "$work/gone-a.php" "$work/gone-b.php" 2>&1)"; rc=$?
+check   "the scanner that could open none of its files fails" "$rc" "2"
+saw     "nothing was scanned"     "$out" "and says so plainly"
+saw_not "looks like a credential" "$out" "and does not report an unreadable file as a credential"
+
+out="$(python3 "$SCANNER" "$repo3/top.php" "$work/gone-a.php" 2>&1)"; rc=$?
+check "one unreadable file among readable ones still fails" "$rc" "1"
+saw   "1 of 2 file(s) could not be scanned" "$out" "and says how many it could not open"
 
 # --- the scanner's own patterns -------------------------------------------
 "$GUARD" self-test >/dev/null 2>&1

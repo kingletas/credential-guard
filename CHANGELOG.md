@@ -10,7 +10,14 @@ All notable changes to this project are documented here. The format follows [Kee
 - **An end-to-end suite** over real temporary repositories, covering what the self-test cannot: that history refuses a blob the working tree no longer contains, that `install` vendors a scanner which runs standalone, and that an existing pre-commit hook is left alone.
 - **CI on Python 3.9, 3.11 and 3.13**, on Linux and macOS. 3.9 is in the matrix deliberately — a pre-commit hook has to run on whatever interpreter a contributor already has.
 
+### Fixed
+
+- **`scan` on a subdirectory read no files at all.** Paths came out of `git ls-files --full-name`, which prints them relative to the repository root, and were then joined onto the path argument — so scanning `module-cache-vary` handed the scanner `module-cache-vary/module-cache-vary/…` and every one of the 62 files came back *No such file or directory*. They are resolved against the repository root now, and a subdirectory scan reads the files it lists. The pre-commit hook was never affected: it passes staged files as arguments and never takes the directory path.
+
 ### Changed
+
+- **A scan that opened no file now fails.** It used to print `nothing to scan` and exit 0, which is a green tick over an unexamined tree — the one thing a credential scanner must never produce. A target that does not exist, or a file list none of which could be opened, exits 2; a directory holding nothing to scan exits 1. **Exit 0 means every file given was opened and none looked like a credential**, and nothing else.
+- **A file that could not be read is no longer reported as a credential.** It was printed under *Refusing to commit: this looks like a credential*, which described the wrong problem. Unreadable files are counted and listed on their own, and still fail the run — a file the scanner cannot open is a file it cannot clear.
 
 - **The tool finds its scanner in either layout.** Installed on `PATH` it keeps its parts in a sibling `<name>.d/` directory; checked out of this repository the scanner sits beside it in `bin/`. It probes rather than assuming, so `./bin/credential-guard` works straight out of a clone — and a tool you cannot run from a fresh clone is a tool nobody evaluates.
 
