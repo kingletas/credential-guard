@@ -132,5 +132,69 @@ saw   "1 of 2 file(s) could not be scanned" "$out" "and says how many it could n
 "$GUARD" self-test >/dev/null 2>&1
 check "the scanner's self-test passes" "$?" "0"
 
+# --- watch: the files that are in no repository -------------------------------
+#
+# Both directions, because a security check that has never been seen to speak
+# is not evidence of anything when it stays quiet.
+
+wdir="$work/watch"; mkdir -p "$wdir"
+printf 'export PATH=/usr/bin\nalias ll="ls -l"\n' > "$wdir/clean-profile"
+# Not an AWS example key: the scanner allowlists those on purpose, which is
+# itself worth knowing when writing a fixture for it.
+printf -- '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAxfake\n-----END RSA PRIVATE KEY-----\n' > "$wdir/dirty-profile"  # pragma: allowlist secret
+list="$work/watchlist"
+
+printf '%s\n' "$wdir/clean-profile" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "watch is silent on a clean file"          "$?" "0"
+
+out="$(GUARD_WATCHLIST="$list" "$GUARD" watch 2>&1)"
+check "and prints nothing at all"                "$out" ""
+
+printf '%s\n' "$wdir/dirty-profile" > "$list"
+out="$(GUARD_WATCHLIST="$list" "$GUARD" watch 2>&1)"; rc=$?
+check "watch fails on a credential"              "$rc" "1"
+# The exit code alone passed while the tool printed nothing at all: `set -e`
+# took the script out at the command substitution, before any of the report.
+# A failing check that says nothing is the thing this tool exists to prevent.
+saw "dirty-profile" "$out" "and names the file it found it in"
+saw "should not hold one" "$out" "and says what is wrong"
+
+printf '# a comment\n\n%s\n' "$wdir/clean-profile" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "comments and blank lines are skipped"     "$?" "0"
+
+# A listed path that has moved must be reported. Skipping it is how a watchlist
+# stops watching without saying so -- the same failure contract-gate had.
+printf '%s\n%s\n' "$wdir/clean-profile" "$wdir/gone" > "$list"
+out="$(GUARD_WATCHLIST="$list" "$GUARD" watch 2>&1)"; rc=$?
+check "a listed path that is gone fails"         "$rc" "1"
+saw "gone" "$out" "and the missing path is named"
+
+printf '%s\n' "$wdir" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "a directory is walked, and the dirty file in it is found" "$?" "1"
+
+# An exclusion glob keeps a build product out of the walk. Without one, a file
+# the scanner refuses to open -- anything too large -- fails the check forever.
+mkdir -p "$wdir/sub/.venv/bin"
+cp "$wdir/dirty-profile" "$wdir/sub/.venv/bin/thing"
+# A clean file has to remain, or excluding the only one leaves nothing to scan
+# -- which this tool refuses to call clean, and is right to.
+cp "$wdir/clean-profile" "$wdir/sub/ordinary"
+printf '%s\n' "$wdir/sub" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "without an exclusion the build product is scanned" "$?" "1"
+printf '%s\n!*/.venv/*\n' "$wdir/sub" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "an ! line excludes it"                    "$?" "0"
+
+printf '%s\n' "$work/no-such-dir/*" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "a glob matching nothing fails rather than passing" "$?" "1"
+
+GUARD_WATCHLIST="$work/no-such-list" "$GUARD" watch >/dev/null 2>&1
+check "no watchlist at all is a usage error"     "$?" "2"
+
 echo "credential-guard tests: $passed passed$([[ $failed -gt 0 ]] && echo ", $failed FAILED")"
 [[ $failed -eq 0 ]]

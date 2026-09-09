@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **`watch` scans the files that live in no repository.** `scan` covers a working tree, which is where a commit can carry a credential away; nothing covered a shell profile, a git config or an alias file, and that is where two credentials survived for years here. Reads a list from `GUARD_WATCHLIST`, silent when clean, `--notify` raises a critical desktop notification because do-not-disturb is a normal state and an alert that respects it is an alert nobody receives.
+- **A watchlist entry that is not on disk is reported rather than skipped**, so the list cannot quietly stop describing anything.
+
 - **This repository.** The tool previously lived in a personal `~/bin` directory, which meant the one thing that was supposed to be vendored into every project could not itself be cloned.
 - **An end-to-end suite** over real temporary repositories, covering what the self-test cannot: that history refuses a blob the working tree no longer contains, that `install` vendors a scanner which runs standalone, and that an existing pre-commit hook is left alone.
 - **CI on Python 3.9, 3.11 and 3.13**, on Linux and macOS. 3.9 is in the matrix deliberately — a pre-commit hook has to run on whatever interpreter a contributor already has.

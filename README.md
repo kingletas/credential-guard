@@ -77,6 +77,22 @@ api_key = "not-really-a-key"  # pragma: allowlist secret
 
 Do that sparingly, and never to silence a real key you intend to rotate later.
 
+## The files that are in no repository
+
+`scan` covers a working tree, because a commit is how a credential travels. **`watch` covers everything that is in no repository at all** — a shell profile, a git config, an alias file, a `~/bin` script that was never committed. Nothing looks at those, which is exactly why credentials survive in them for years.
+
+```bash
+credential-guard watch            # silent when clean
+credential-guard watch --notify   # and shout at the desktop when it is not
+```
+
+It reads `GUARD_WATCHLIST` (default `~/.config/credential-guard/watchlist`): one path per line, `#` comments and blank lines ignored, `~` expanded, globs allowed, and a directory is walked.
+
+> [!important] The list holds files that must **not** contain a credential
+> A designated store — `~/.aws/credentials`, a password file, an encrypted archive — does not go on it. Those hold credentials on purpose, and listing one makes the check fire on every single run. **A check that can never be silent is not a check**, and a weekly false alarm is the fastest way to have it uninstalled. Permissions are what protect a designated store; this is for the places a credential should never have reached.
+
+**A listed path that is not on disk is reported, not skipped.** Skipping is how a watchlist stops watching anything without ever saying so.
+
 ## It is a tripwire, not a guarantee
 
 **Nothing here replaces rotating a key you think you have leaked.** A determined mistake will get through, and the point is to catch the careless one.
