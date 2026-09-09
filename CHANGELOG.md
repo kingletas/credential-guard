@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - **`watch` scans the files that live in no repository.** `scan` covers a working tree, which is where a commit can carry a credential away; nothing covered a shell profile, a git config or an alias file, and that is where two credentials survived for years here. Reads a list from `GUARD_WATCHLIST`, silent when clean, `--notify` raises a critical desktop notification because do-not-disturb is a normal state and an alert that respects it is an alert nobody receives.
 - **A watchlist entry that is not on disk is reported rather than skipped**, so the list cannot quietly stop describing anything.
+- **`watch` batches the scanner rather than passing every path in one call.** A watchlist naming a large directory blew past ARG_MAX at 35,541 files, and the wrapper reported "Argument list too long" **as a credential finding**. A scanner that could not run now exits 2 and says nothing was checked, which is a different thing from a scanner that looked and found something.
 - **A glob contributes the files it matches and does not walk the directories it also matches**, so a pattern like `~/.[!.]*` covers a directory's own files without descending into every cache below it.
 
 - **This repository.** The tool previously lived in a personal `~/bin` directory, which meant the one thing that was supposed to be vendored into every project could not itself be cloned.

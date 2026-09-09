@@ -203,6 +203,20 @@ printf '%s/globdir\n' "$wdir" > "$list"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
 check "a directory named outright is still walked"      "$?" "1"
 
+# A watchlist that names a large directory must not blow past ARG_MAX. Handing
+# every path to the scanner in one call failed with "Argument list too long" --
+# and the wrapper called that a credential. A scanner that could not run has to
+# read differently from a scanner that found something.
+mkdir -p "$wdir/many"
+for i in $(seq 1 3000); do printf 'nothing here\n' > "$wdir/many/file-with-a-fairly-long-name-$i"; done
+printf '%s\n' "$wdir/many" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "three thousand files are scanned in batches" "$?" "0"
+cp "$wdir/dirty-profile" "$wdir/many/tainted"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "and a credential among them is still found"  "$?" "1"
+rm -rf "$wdir/many"
+
 printf '%s\n' "$work/no-such-dir/*" > "$list"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
 check "a glob matching nothing fails rather than passing" "$?" "1"
