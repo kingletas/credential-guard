@@ -189,6 +189,20 @@ printf '%s\n!*/.venv/*\n' "$wdir/sub" > "$list"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
 check "an ! line excludes it"                    "$?" "0"
 
+# A glob contributes the files it matched, not the trees under the directories
+# it also matched. `~/.[!.]*` means "the dotfiles at the top of my home", and
+# walking the dot directories it hits means scanning ~/.cache -- the check then
+# times out instead of reporting anything.
+mkdir -p "$wdir/globdir/deep"
+cp "$wdir/dirty-profile" "$wdir/globdir/deep/hidden"
+cp "$wdir/clean-profile" "$wdir/globfile"
+printf '%s/glob*\n' "$wdir" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "a glob does not walk the directories it matches" "$?" "0"
+printf '%s/globdir\n' "$wdir" > "$list"
+GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
+check "a directory named outright is still walked"      "$?" "1"
+
 printf '%s\n' "$work/no-such-dir/*" > "$list"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
 check "a glob matching nothing fails rather than passing" "$?" "1"

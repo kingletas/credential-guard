@@ -86,7 +86,11 @@ credential-guard watch            # silent when clean
 credential-guard watch --notify   # and shout at the desktop when it is not
 ```
 
-It reads `GUARD_WATCHLIST` (default `~/.config/credential-guard/watchlist`): one path per line, `#` comments and blank lines ignored, `~` expanded, globs allowed, and a directory is walked.
+It reads `GUARD_WATCHLIST` (default `~/.config/credential-guard/watchlist`): one path per line, `#` comments and blank lines ignored, `~` expanded, `!` lines excluding by glob.
+
+**A directory named outright is walked. A glob contributes only the files it matches.** That distinction is what makes `~/.[!.]*` mean *every dotfile at the top of my home directory* rather than *walk `~/.cache` and `~/.local` too* — which is a scan of hundreds of thousands of files and a check that times out instead of reporting.
+
+**Prefer deny-by-default.** An enumerated list only catches what somebody remembered to list, and the credential that survived longest here was in a file nobody had thought of: a four-year-old copy of a shell profile, unsourced, carrying an AWS key and three Slack tokens.
 
 > [!important] The list holds files that must **not** contain a credential
 > A designated store — `~/.aws/credentials`, a password file, an encrypted archive — does not go on it. Those hold credentials on purpose, and listing one makes the check fire on every single run. **A check that can never be silent is not a check**, and a weekly false alarm is the fastest way to have it uninstalled. Permissions are what protect a designated store; this is for the places a credential should never have reached.
