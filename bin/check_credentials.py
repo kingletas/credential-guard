@@ -255,8 +255,7 @@ def _self_test() -> int:
         'api_key = os.environ.get("MYAPP_API_KEY")',
         'api_key = "abcdefghijklmnop1234"  # pragma: allowlist secret',
         'twilio_from = "+15550001111"',
-        # Credential-shaped names whose values plainly are not secrets. Every one
-        # of these was a false positive against the real source tree.
+        # Credential-shaped names whose values plainly are not secrets.
         "max_tokens=self.settings.agent_max_tokens,",
         "tokenize = 'unicode61 remove_diacritics 2',",
         'TOKEN_FILENAME = "google-token.json"',
