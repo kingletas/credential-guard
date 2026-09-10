@@ -14,8 +14,10 @@ tests/run.sh
 
 There is nothing to install. `bash`, `python3` and `git` are all it needs, and `shellcheck` if you are touching the shell half.
 
+Before you send a change, run the same gate CI runs:
+
 ```bash
-pre-commit install
+make check
 ```
 
 ## Two rules that outrank everything else
