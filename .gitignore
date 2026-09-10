@@ -8,3 +8,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+
+# Disposable output: build products, screenshots, scratch notes. Never committed.
+local.d/
