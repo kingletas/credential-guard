@@ -35,8 +35,10 @@ git clone https://github.com/kingletas/credential-guard && cd credential-guard
 ```
 
 ```bash
-install -m 755 bin/credential-guard ~/bin/ && install -m 755 bin/check_credentials.py ~/bin/credential-guard.d/check_credentials.py
+make install
 ```
+
+That copies the command into `~/bin`, which has to exist already. To put it somewhere else, run `make install PREFIX=/path/to/dir`. You can also skip installing and run `./bin/credential-guard` straight from the checkout. [`docs/from-nothing.md`](docs/from-nothing.md) walks through a first scan step by step.
 
 It needs Python 3.9 or newer and `bash`. **There are no third-party imports and there will not be**: a pre-commit hook has to run on whatever interpreter a contributor already has, and a scanner that needs a specific environment is a scanner that gets skipped on the machine where it matters.
 
