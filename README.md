@@ -13,7 +13,7 @@
 
 ---
 
-Two commands you will use, and one you will be glad exists:
+Two commands you'll use, and one you'll be glad exists:
 
 ```bash
 credential-guard scan .        # the working tree
@@ -22,9 +22,9 @@ credential-guard history .     # every blob ever committed
 credential-guard install .     # vendor the hook into a repo and wire it up
 ```
 
-**Exit 0 means every file was opened and none looked like a credential — nothing else.** A scan that found something, or that could not read a file, exits 1; one given a target that does not exist, or a file list it could open none of, exits 2. A security check whose silence can also mean *I did not look* is worse than no check, because it still prints a green tick.
+**Exit 0 means every file was opened and none looked like a credential — nothing else.** A scan that found something, or that couldn't read a file, exits 1; one given a target that doesn't exist, or a file list it could open none of, exits 2. A security check whose silence can also mean *I didn't look* is worse than no check, because it still prints a green tick.
 
-**The history scan is the point.** A key you removed in a later commit is still in the repository, and is still published by a push. This is not hypothetical — one project here shipped a first commit holding ten environment fallbacks with real values in them, and nothing in a working-tree scan would ever have said so.
+**The history scan is the point.** A key you removed in a later commit is still in the repository, and is still published by a push. This isn't hypothetical — one project here shipped a first commit holding ten environment fallbacks with real values in them, and nothing in a working-tree scan would ever have said so.
 
 ## Install
 
@@ -40,7 +40,7 @@ make install
 
 That copies the command into `~/bin`, which has to exist already. To put it somewhere else, run `make install PREFIX=/path/to/dir`. You can also skip installing and run `./bin/credential-guard` straight from the checkout. [`docs/from-nothing.md`](docs/from-nothing.md) walks through a first scan step by step.
 
-It needs Python 3.9 or newer and `bash`. **There are no third-party imports and there will not be**: a pre-commit hook has to run on whatever interpreter a contributor already has, and a scanner that needs a specific environment is a scanner that gets skipped on the machine where it matters.
+It needs Python 3.9 or newer and `bash`. **There are no third-party imports and there won't be**: a pre-commit hook has to run on whatever interpreter a contributor already has, and a scanner that needs a specific environment is a scanner that gets skipped on the machine where it matters.
 
 ## Wiring it into a repository
 
@@ -51,10 +51,10 @@ credential-guard install /path/to/repo
 That **copies** the scanner to `scripts/check_credentials.py` in the target repo and wires it up:
 
 - If the repo uses [pre-commit](https://pre-commit.com), it prints the hook block to add — or updates the vendored copy in place if the hook is already there.
-- If it does not, it writes a plain `.git/hooks/pre-commit` that needs no framework at all and works in a repository that has never seen Python.
+- If it doesn't, it writes a plain `.git/hooks/pre-commit` that needs no framework at all and works in a repository that has never seen Python.
 - **An existing hook is never overwritten.** It prints the one line to add instead.
 
-**Why it copies rather than referencing the tool on your `PATH`:** a pre-commit hook has to run for everyone who clones the repository, and a contributor does not have your `PATH`. One owner, and a copy for people who clone. Re-running `install` updates the vendored copy.
+**Why it copies rather than referencing the tool on your `PATH`:** a pre-commit hook has to run for everyone who clones the repository, and a contributor doesn't have your `PATH`. One owner, and a copy for people who clone. Re-running `install` updates the vendored copy.
 
 ## What it refuses
 
@@ -65,9 +65,9 @@ That **copies** the scanner to `scripts/check_credentials.py` in the target repo
 | **Environment fallbacks with a real value** | `os.environ.get("API_KEY", "sk_live_…")` — the pattern that put ten real keys in a first commit |
 | **Files that should never be committed at all** | `.env`, `*.pem`, `*.key`, `*.db`, `*.sqlite` |
 
-**A match is reported redacted to its first four characters**, so the error message does not leak what the commit would have.
+**A match is reported redacted to its first four characters**, so the error message doesn't leak what the commit would have.
 
-### It is biased toward letting placeholders through
+### It's biased toward letting placeholders through
 
 `xxxxx`, `<your-key-here>`, `changeme`, `AKIAIOSFODNN7EXAMPLE` (AWS's own documented example) and friends are recognised and allowed. That bias is deliberate: **a scanner that cries wolf is a scanner people disable**, and a disabled scanner catches nothing at all.
 
@@ -81,7 +81,7 @@ Do that sparingly, and never to silence a real key you intend to rotate later.
 
 ## The files that are in no repository
 
-`scan` covers a working tree, because a commit is how a credential travels. **`watch` covers everything that is in no repository at all** — a shell profile, a git config, an alias file, a `~/bin` script that was never committed. Nothing looks at those, which is exactly why credentials survive in them for years.
+`scan` covers a working tree, because a commit is how a credential travels. **`watch` covers everything that's in no repository at all** — a shell profile, a git config, an alias file, a `~/bin` script that was never committed. Nothing looks at those, which is exactly why credentials survive in them for years.
 
 ```bash
 credential-guard watch            # silent when clean
@@ -95,15 +95,15 @@ It reads `GUARD_WATCHLIST` (default `~/.config/credential-guard/watchlist`): one
 **Prefer deny-by-default.** An enumerated list only catches what somebody remembered to list, and the credential that survived longest here was in a file nobody had thought of: a four-year-old copy of a shell profile, unsourced, carrying an AWS key and three Slack tokens.
 
 > [!important] The list holds files that must **not** contain a credential
-> A designated store — `~/.aws/credentials`, a password file, an encrypted archive — does not go on it. Those hold credentials on purpose, and listing one makes the check fire on every single run. **A check that can never be silent is not a check**, and a weekly false alarm is the fastest way to have it uninstalled. Permissions are what protect a designated store; this is for the places a credential should never have reached.
+> A designated store — `~/.aws/credentials`, a password file, an encrypted archive — doesn't go on it. Those hold credentials on purpose, and listing one makes the check fire on every single run. **A check that can never be silent isn't a check**, and a weekly false alarm is the fastest way to have it uninstalled. Permissions are what protect a designated store; this is for the places a credential should never have reached.
 
-**A listed path that is not on disk is reported, not skipped.** Skipping is how a watchlist stops watching anything without ever saying so.
+**A listed path that isn't on disk is reported, not skipped.** Skipping is how a watchlist stops watching anything without ever saying so.
 
-## It is a tripwire, not a guarantee
+## It's a tripwire, not a guarantee
 
 **Nothing here replaces rotating a key you think you have leaked.** A determined mistake will get through, and the point is to catch the careless one.
 
-If a key does reach a commit: **rotate it first, then clean the history.** Rewriting history does not recall a copy someone has already cloned, and it does not un-index a page a scraper already read. The rewrite is housekeeping; the rotation is the fix.
+If a key does reach a commit: **rotate it first, then clean the history.** Rewriting history doesn't recall a copy someone has already cloned, and it doesn't un-index a page a scraper already read. The rewrite is housekeeping; the rotation is the fix.
 
 ## Checking the scanner itself
 
@@ -116,7 +116,7 @@ The self-test is worth running after any change to the patterns. **Half its case
 
 ## Contributing
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md) covers the toolchain and the rules that are not obvious from the code. [`docs/architecture.md`](docs/architecture.md) explains how the pieces fit together. [`SECURITY.md`](SECURITY.md) covers vulnerability reports.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) covers the toolchain and the rules that aren't obvious from the code. [`docs/architecture.md`](docs/architecture.md) explains how the pieces fit together. [`SECURITY.md`](SECURITY.md) covers vulnerability reports.
 
 ## License
 

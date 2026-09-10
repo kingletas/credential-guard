@@ -2,7 +2,7 @@
 
 Thanks for taking an interest. This is MIT-licensed and reuse is the point — fork it, strip it for parts, or send a patch back.
 
-This file covers the mechanics. [`README.md`](README.md) explains what it does, [`docs/architecture.md`](docs/architecture.md) explains how the pieces fit together, and [`SECURITY.md`](SECURITY.md) covers vulnerability reports — **please do not open a public issue for a security problem, and never include a live credential in one.**
+This file covers the mechanics. [`README.md`](README.md) explains what it does, [`docs/architecture.md`](docs/architecture.md) explains how the pieces fit together, and [`SECURITY.md`](SECURITY.md) covers vulnerability reports — **please don't open a public issue for a security problem, and never include a live credential in one.**
 
 ## Getting set up
 
@@ -12,7 +12,7 @@ bin/check_credentials.py --self-test
 tests/run.sh
 ```
 
-There is nothing to install. `bash`, `python3` and `git` are all it needs, and `shellcheck` if you are touching the shell half.
+There's nothing to install. `bash`, `python3` and `git` are all it needs, and `shellcheck` if you're touching the shell half.
 
 Before you send a change, run the same gate CI runs:
 
@@ -24,7 +24,7 @@ make check
 
 **No third-party imports. Ever.** This scanner is vendored into other people's repositories and runs as a pre-commit hook, so it has to work on whatever interpreter a contributor already has. **A dependency here is a dependency in every repository this is copied into**, and a hook that fails to import is a hook somebody removes rather than fixes. CI runs the matrix down to Python 3.9 to keep this honest.
 
-**Never widen the redaction.** A match is reported as its first four characters and no more. The error message has to be safe to paste into a bug report, a CI log, or a screenshot — a hook whose output you cannot share is a hook people bypass instead of reading. This applies to the self-test output too.
+**Never widen the redaction.** A match is reported as its first four characters and no more. The error message has to be safe to paste into a bug report, a CI log, or a screenshot — a hook whose output you can't share is a hook people bypass instead of reading. This applies to the self-test output too.
 
 ## Adding a pattern
 
@@ -36,11 +36,11 @@ make check
 
 When you add a pattern, check it against the placeholder list. `xxxxx`, `<your-key-here>`, `changeme` and the providers' own documented example keys must keep passing — `AKIAIOSFODNN7EXAMPLE` is AWS's published example and appears in real documentation, so flagging it would fail every commit that mentions AWS.
 
-## Four things that are not obvious from the code
+## Four things that aren't obvious from the code
 
 **The scanner excludes itself, twice.** It contains every pattern it looks for and a self-test full of specimen keys, so a copy of it would flag itself. It matches on the **filename** — because the canonical copy and a vendored copy are different files — and on a **content marker**, because a copy read out of git history arrives under its blob hash with no filename at all.
 
-**The history scan reconstructs filenames on purpose.** Every blob is written into a temporary tree under a path it was once committed at, so a finding says `config/services.py` rather than a hash nobody can act on. It also means the **filename rules fire on history too** — a `.env` committed once and deleted later is still in the repository, and that is exactly what this command is for.
+**The history scan reconstructs filenames on purpose.** Every blob is written into a temporary tree under a path it was once committed at, so a finding says `config/services.py` rather than a hash nobody can act on. It also means the **filename rules fire on history too** — a `.env` committed once and deleted later is still in the repository, and that's exactly what this command is for.
 
 **The temporary tree is removed by a trap, not by a line at the end.** It holds every blob in the repository. A scan that exits early — a failed `cat-file`, a Ctrl-C — must not leave that on disk.
 
