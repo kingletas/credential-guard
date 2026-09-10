@@ -14,6 +14,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - **This repository.** The tool previously lived in a personal `~/bin` directory, which meant the one thing that was supposed to be vendored into every project could not itself be cloned.
 - **An end-to-end suite** over real temporary repositories, covering what the self-test cannot: that history refuses a blob the working tree no longer contains, that `install` vendors a scanner which runs standalone, and that an existing pre-commit hook is left alone.
 - **CI runs `make check` on Python 3.9, 3.11 and 3.13**, on Linux. 3.9 is in the matrix deliberately — a pre-commit hook has to run on whatever interpreter a contributor already has. A macOS run is available on request from the Actions tab and never starts on a push.
+- **A release workflow.** Pushing a tag such as `v1.0.0` runs `make check`, proves `make install` works, and publishes a GitHub Release whose body is that version's section of this file. A tag with no section here fails before anything is published.
 
 ### Fixed
 

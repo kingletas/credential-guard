@@ -38,7 +38,7 @@ test: ## The end-to-end suite
 
 .PHONY: lint
 lint: ## Static checks
-	@printf '  %-14s ' shellcheck; if command -v shellcheck >/dev/null 2>&1; then shellcheck bin/credential-guard tests/run.sh scripts/install && echo ok; else echo 'skipped (not installed)'; fi; printf '  %-14s ' 'scanner self-test'; python3 bin/check_credentials.py --self-test >/dev/null && echo ok
+	@printf '  %-14s ' shellcheck; if command -v shellcheck >/dev/null 2>&1; then shellcheck bin/credential-guard tests/run.sh scripts/install packaging/release-notes.sh && echo ok; else echo 'skipped (not installed)'; fi; printf '  %-14s ' 'scanner self-test'; python3 bin/check_credentials.py --self-test >/dev/null && echo ok
 
 .PHONY: check
 check: lint test ## Everything a commit has to pass
