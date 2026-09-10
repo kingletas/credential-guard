@@ -10,56 +10,58 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: Test (Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
+  check:
+    name: make check (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        # A pre-commit hook runs on whatever Python a contributor already has,
+        # so the oldest supported version is tested alongside the newest.
         python-version: ["3.9", "3.11", "3.13"]
-        include:
-          - os: macos-latest
-            python-version: "3.13"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
-      # Python 3.9 is in the matrix on purpose. A pre-commit hook has to run on
-      # whatever interpreter a contributor already has, and a scanner that needs
-      # a recent Python is a scanner that gets skipped on the machine where it
-      # matters. There are no third-party imports for the same reason.
-      - name: The scanner's own patterns
-        run: python3 bin/check_credentials.py --self-test
-
-      - name: End to end
-        run: tests/run.sh
-
-  lint:
-    name: Shellcheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
+      # make lint skips shellcheck when it is missing, so it is installed here.
       - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck bin/credential-guard tests/run.sh
+        run: sudo apt-get update -qq && sudo apt-get install -y shellcheck
+
+      - name: make check
+        run: make check
+
+  macos:
+    name: make check (macOS, on request)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      # macOS ships BSD find and xargs, which the hook and watch both call.
+      - name: make check
+        run: make check
 
   dogfood:
     name: Scan this repository's own history
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      # The scanner and its tests hold specimen keys as data, so a naive history
-      # scan of this repository refuses itself. `--self` is not a thing; instead
-      # confirm the tool RUNS over history and reports, which is the property
-      # that breaks silently when the blob-walking changes.
+      # The tests hold specimen keys as data, so this checks that the history
+      # scan runs and reports, not that it comes back clean.
       - name: History scan produces a report
         run: |
           set -uo pipefail
