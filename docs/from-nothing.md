@@ -48,7 +48,7 @@ credential-guard self-test | tail -1
 ```
 
 ```text
-self-test: 54/54 passed
+self-test: 60/60 passed
 ```
 
 ## Step 2: make a practice repository with a mistake in its past

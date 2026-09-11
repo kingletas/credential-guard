@@ -164,6 +164,7 @@ NOT_SECRET_VALUE = re.compile(
       | (?-i:(/?[a-z][a-z0-9_.\-]*|[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9]*)(/[a-z0-9_.\-]+)+)  # config/path, /abs/path, Vendor_Module/asset
       | \d{4}-?\d{2}-?\d{2}(T?\d{2}:?\d{2}(:?\d{2}(\.\d+)?)?)?(Z|[+\-]\d{2}:?\d{2})?  # a timestamp
       | \#[A-Za-z][\w\-]*(,\#[A-Za-z][\w\-]*)+    # a CSS selector list
+      | \d+:[0-3]:([A-Za-z0-9+/=]+:)?[A-Za-z0-9+/\\]+={0,2}  # Magento ciphertext, key:cipher[:iv]:base64
       | .*\.(json|txt|py|md|ya?ml|toml|cfg|ini|db|log|pem)  # a filename
       | https?://.*
     )$"""
@@ -284,6 +285,8 @@ def _self_test() -> int:
         "'client_secret' => 'tR4nQ8vLm2Kx/Zp7Wc3Yh9Jd/Bf6Gs1Na5Ue0Vq',",
         "'client_secret' => '/Zp7Wc3Yh9Jd/Bf6Gs1Na5Ue0VqtR4nQ8vLm2Kx',",
         "'password' => 'Blue_Heron_Password_2291',",
+        "'api_key' => '7:9:Wq3Rt8Yp2Lk6Mn4Bv1Cx5Zs',",
+        "'client_secret' => 'k9:3:Zx4Qw7mR2pL8tN3vB6yH1jD',",
     ]
     ignored = [
         'api_key = ""',
@@ -328,6 +331,12 @@ def _self_test() -> int:
         '"azure_federated_token_file": "/var/run/secrets/azure/token",',
         '"token_not_after": "20900101010102Z",',
         '"passwordRevisionDate": "2022-07-26T23:03:23.399Z",',
+        # Magento ciphertext needs the store's crypt key to read, as stored, in
+        # JSON and in a readline history that writes a backslash as \134.
+        "'password' => '0:3:Jom7l1J3yXlLdATtMN13wd0cNkFM63/P',",
+        '{"token":"0:3:dIRxLh6njRGqCDnWQpKZG96dFaWxS\\/zjScdDlh3iCx8tNeTXpzuqALc32mGJ7hbo"}',
+        '"timeout":5,"token":"0:3:2IGKJDBoKc4E2alMrPIz\\134/kxw0lWhgz6f2MwnTApFvOY="}',
+        "<api_key>0:2:Tc4DqMowCR3dwUlr:2IGKJDBoKc4E2alMrPIz/kxw0lWhgz6f2MwnTApFvOY=</api_key>",
     ]
     failures = 0
     for line in caught:

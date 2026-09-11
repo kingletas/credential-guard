@@ -108,7 +108,7 @@ If a key does reach a commit: **rotate it first, then clean the history.** Rewri
 ## Checking the scanner itself
 
 ```bash
-credential-guard self-test    # 54 cases: what it must catch, and what it must not
+credential-guard self-test    # 60 cases: what it must catch, and what it must not
 tests/run.sh                  # end to end, over real temporary repositories
 ```
 
