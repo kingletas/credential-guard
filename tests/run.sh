@@ -128,6 +128,67 @@ out="$(python3 "$SCANNER" "$repo3/top.php" "$work/gone-a.php" 2>&1)"; rc=$?
 check "one unreadable file among readable ones still fails" "$rc" "1"
 saw   "1 of 2 file(s) could not be scanned" "$out" "and says how many it could not open"
 
+printf '' | python3 "$SCANNER" --files0-from - >/dev/null 2>&1
+check "an empty file list on stdin fails" "$?" "2"
+
+python3 "$SCANNER" --files0-from "$work/no-such-list" >/dev/null 2>&1
+check "a file list that cannot be read fails" "$?" "2"
+
+# --- explicit files go through the same path as a directory walk ---------
+"$GUARD" scan "$repo3/top.php" "$repo3/module/Api/Clean.php" >/dev/null 2>&1
+check "several clean files pass" "$?" "0"
+
+"$GUARD" scan "$repo3/top.php" "$repo3/module/Api/Leak.php" >/dev/null 2>&1
+check "several files, one holding a credential, fail" "$?" "1"
+
+# --- a directory with more files than fit on one command line ------------
+# Every path is over 500 bytes, so a few thousand files outgrow ARG_MAX.
+big="$work/big"
+deep="$big/$(printf 'd%.0s' {1..250})"; mkdir -p "$deep"
+long="$(printf 'f%.0s' {1..240})"
+arg_max="$(getconf ARG_MAX)"
+count=$(( arg_max / 500 + 1 ))
+for (( i = 1; i <= count; i++ )); do printf 'nothing here\n' > "$deep/$long-$i"; done
+bytes="$(find "$big" -type f -print0 | wc -c)"
+if (( bytes > arg_max )); then ok "the fixture's paths alone exceed ARG_MAX"
+else bad "the fixture's paths alone exceed ARG_MAX ($bytes of $arg_max bytes)"; fi
+git -C "$big" rev-parse >/dev/null 2>&1
+check "and it sits outside any git repository, so find walks it" "$?" "128"
+
+out="$("$GUARD" scan "$big" 2>&1)"; rc=$?
+check   "a directory too large for one command line is scanned" "$rc" "0"
+saw     "scanning $count file(s)" "$out" "and every file in it is counted"
+saw_not "too long"                "$out" "without hitting the argument limit"
+
+printf 'api_key = "sk_live_9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"\n' > "$big/planted.php"  # pragma: allowlist secret
+out="$("$GUARD" scan "$big" 2>&1)"; rc=$?
+check "a credential among them is still found" "$rc" "1"
+saw   "big/planted.php" "$out" "and the finding names the file"
+rm -rf "$big"
+
+# --- a scanner that could not run is its own error, never a finding ------
+out="$(GUARD_SCANNER="$work/no-such-scanner.py" "$GUARD" scan "$repo3/top.php" 2>&1)"; rc=$?
+check "a missing scanner exits 2" "$rc" "2"
+saw   "scanner not found" "$out" "and says so"
+
+printf 'import os, signal\nos.kill(os.getpid(), signal.SIGKILL)\n' > "$work/killed.py"
+out="$(GUARD_SCANNER="$work/killed.py" "$GUARD" scan "$repo3/module" 2>&1)"; rc=$?
+check   "a scanner killed mid-run exits 2"  "$rc" "2"
+saw     "could not be run"        "$out" "and says nothing was checked"
+saw_not "looks like a credential" "$out" "and does not call it a finding"
+
+out="$(PYTHONDONTWRITEBYTECODE=1 python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import check_credentials as scanner
+def fail(path):
+    raise RuntimeError("simulated")
+scanner.scan_file = fail
+sys.exit(scanner.run([sys.argv[2]]))
+' "$HERE/bin" "$repo3/top.php" 2>&1)"; rc=$?
+check "a scanner that raises exits 2, not 1" "$rc" "2"
+saw   "nothing is cleared" "$out" "and says why"
+
 # --- the scanner's own patterns -------------------------------------------
 "$GUARD" self-test >/dev/null 2>&1
 check "the scanner's self-test passes" "$?" "0"
@@ -165,7 +226,7 @@ GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
 check "comments and blank lines are skipped"     "$?" "0"
 
 # A listed path that has moved must be reported. Skipping it is how a watchlist
-# stops watching without saying so -- the same failure contract-gate had.
+# stops watching without saying so.
 printf '%s\n%s\n' "$wdir/clean-profile" "$wdir/gone" > "$list"
 out="$(GUARD_WATCHLIST="$list" "$GUARD" watch 2>&1)"; rc=$?
 check "a listed path that is gone fails"         "$rc" "1"

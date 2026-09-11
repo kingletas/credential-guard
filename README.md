@@ -22,7 +22,7 @@ credential-guard history .     # every blob ever committed
 credential-guard install .     # vendor the hook into a repo and wire it up
 ```
 
-**Exit 0 means every file was opened and none looked like a credential — nothing else.** A scan that found something, or that couldn't read a file, exits 1; one given a target that doesn't exist, or a file list it could open none of, exits 2. A security check whose silence can also mean *I didn't look* is worse than no check, because it still prints a green tick.
+**Exit 0 means every file was opened and none looked like a credential — nothing else.** A scan that found something, or that couldn't read a file, exits 1; one given a target that doesn't exist, a file list it could open none of, or a scanner that couldn't run at all, exits 2. A security check whose silence can also mean *I didn't look* is worse than no check, because it still prints a green tick.
 
 **The history scan is the point.** A key you removed in a later commit is still in the repository, and is still published by a push. This isn't hypothetical — one project here shipped a first commit holding ten environment fallbacks with real values in them, and nothing in a working-tree scan would ever have said so.
 

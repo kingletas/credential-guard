@@ -7,12 +7,17 @@ careless one. Nothing here replaces rotating a key you think you have leaked.
 
 Usage:
     python scripts/check_credentials.py FILE [FILE ...]
+    python scripts/check_credentials.py --files0-from LIST
     python scripts/check_credentials.py --self-test
+
+``--files0-from`` reads NUL-separated file names from LIST, or from standard
+input when LIST is ``-``, so a file list of any length fits.
 
 Exit status is 0 only when every file given was opened and none looked like a
 credential. It is 1 when something was found or a file could not be read, and 2
-when no file was given or not one of them could be opened -- because a scanner
-that exits 0 having read nothing reports an unexamined tree as a clean one.
+when no file was given, not one of them could be opened, or the scanner itself
+failed -- because a scanner that exits 0 having read nothing reports an
+unexamined tree as a clean one, and a crash is not a finding.
 
 Mark a genuine false positive with a trailing ``pragma: allowlist secret``
 comment on the offending line. Do that sparingly and never to silence a real
@@ -21,6 +26,8 @@ key you intend to rotate later.
 
 from __future__ import annotations
 
+import logging
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -336,20 +343,43 @@ def _self_test() -> int:
     return 1 if failures else 0
 
 
+FILES_FROM = "--files0-from"
+
+
+def _names_from(source: str) -> list[str]:
+    """Read NUL-separated file names from a file, or from standard input for '-'."""
+    data = sys.stdin.buffer.read() if source == "-" else Path(source).read_bytes()
+    return [os.fsdecode(name) for name in data.split(b"\0") if name]
+
+
 def main(argv: list[str]) -> int:
     if "--self-test" in argv:
         return _self_test()
+    paths = argv
+    if argv[:1] == [FILES_FROM]:
+        if len(argv) != 2:
+            print(f"{SELF_NAME}: {FILES_FROM} takes one LIST and no files", file=sys.stderr)
+            return 2
+        try:
+            paths = _names_from(argv[1])
+        except OSError as error:
+            print(
+                f"{SELF_NAME}: cannot read the file list {argv[1]} ({error.strerror});"
+                " nothing was scanned",
+                file=sys.stderr,
+            )
+            return 2
     # Exit 0 has to mean "opened every file and found nothing". A run that
     # opened none of them is not a clean result, it is an absent one, and
     # reporting it as clean is how an unscanned tree gets called cleared.
-    if not argv:
+    if not paths:
         print(f"{SELF_NAME}: no files given; nothing was scanned", file=sys.stderr)
         return 2
     findings: list[str] = []
     problems: list[str] = []
     opened = 0
-    for arg in argv:
-        result = scan_file(Path(arg))
+    for name in paths:
+        result = scan_file(Path(name))
         findings.extend(result.findings)
         problems.extend(result.problems)
         opened += result.opened
@@ -359,7 +389,7 @@ def main(argv: list[str]) -> int:
     # this run cannot clear, so it fails rather than passing quietly.
     if problems:
         print(
-            f"{SELF_NAME}: {len(problems)} of {len(argv)} file(s) could not be scanned.",
+            f"{SELF_NAME}: {len(problems)} of {len(paths)} file(s) could not be scanned.",
             file=sys.stderr,
         )
         for problem in problems:
@@ -381,5 +411,16 @@ def main(argv: list[str]) -> int:
     return 1 if findings or problems else 0
 
 
+def run(argv: list[str]) -> int:
+    """Run the scanner, reporting an unexpected error as a failed scan rather than a finding."""
+    try:
+        return main(argv)
+    except Exception:
+        logging.getLogger(SELF_NAME).exception(
+            "%s: the scanner failed, so nothing is cleared.", SELF_NAME
+        )
+        return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(run(sys.argv[1:]))
