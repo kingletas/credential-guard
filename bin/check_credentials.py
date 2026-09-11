@@ -81,14 +81,21 @@ ISSUED = [
 # whose `\b` did not match beside an underscore, so `aws_secret_access_key = …`
 # passed it. Underscores are word characters; `\bsecret\b` cannot see one that
 # has a word character on both sides.
-_WORDS = r"api_?key|secret|token|passwd|password|auth|credential"
+_WORDS = r"api_?key|access_?key|secret|token|passwd|password|auth|credential"
 SECRET_NAME = rf"[A-Za-z0-9_.\-]*(?:{_WORDS})[A-Za-z0-9_.\-]*"
 
 ASSIGNED = [
-    # api_key = "…"  /  "api_key": "…"  /  api_key: "…"
+    # api_key = "…"  /  "api_key": "…"  /  api_key: "…"  /  'api_key' => '…'
     (
         "credential assigned a literal",
-        re.compile(rf"""(?i)\b{SECRET_NAME}\s*[:=]\s*["']([^"'\n]{{12,}})["']"""),
+        re.compile(
+            rf"""(?i)\b{SECRET_NAME}["']?\s*(?:=>|[:=])\s*["']([^"'\n]{{12,}})["']"""
+        ),
+    ),
+    # <api_key>…</api_key>, as in a Magento module's etc/config.xml defaults.
+    (
+        "credential in an XML element",
+        re.compile(rf"""(?i)<{SECRET_NAME}(?:\s[^<>]*)?>([^<\n]{{12,}})</{SECRET_NAME}\s*>"""),
     ),
     # os.environ.get("API_KEY", "…") — a fallback default is a committed secret.
     # This is the exact shape that sat in this project's own first commit.
@@ -146,15 +153,25 @@ NOT_SECRET_VALUE = re.compile(
         .*\s.*                                   # prose: a secret has no spaces
       | .*[()\[\]{}].*                            # an expression or f-string
       | [A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+   # dotted.attribute.path
+      | \\?[A-Za-z_][A-Za-z0-9_]*(\\[A-Za-z_][A-Za-z0-9_]*)+  # Vendor\Php\ClassName
+      | (?-i:(/?[a-z][a-z0-9_.\-]*|[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9]*)(/[a-z0-9_.\-]+)+)  # config/path, /abs/path, Vendor_Module/asset
+      | \d{4}-?\d{2}-?\d{2}(T?\d{2}:?\d{2}(:?\d{2}(\.\d+)?)?)?(Z|[+\-]\d{2}:?\d{2})?  # a timestamp
+      | \#[A-Za-z][\w\-]*(,\#[A-Za-z][\w\-]*)+    # a CSS selector list
       | .*\.(json|txt|py|md|ya?ml|toml|cfg|ini|db|log|pem)  # a filename
       | https?://.*
     )$"""
 )
 
+# A lowercase identifier with a credential word as one of its parts names a field
+# rather than holding one: `customer_password_reset_template`, `payment-auth-token`.
+FIELD_IDENTIFIER = re.compile(
+    r"^([a-z0-9]+[_\-])*(passwd|password|secret|token|auth|credentials?)([_\-][a-z0-9]+)*$"
+)
+
 
 def _looks_like_secret(value: str) -> bool:
     """Reject values that carry a credential-shaped name but obvious other content."""
-    if NOT_SECRET_VALUE.match(value):
+    if NOT_SECRET_VALUE.match(value) or FIELD_IDENTIFIER.match(value):
         return False
     # Real keys mix letters and digits, or are long enough that it does not matter.
     has_digit = any(c.isdigit() for c in value)
@@ -245,6 +262,21 @@ def _self_test() -> int:
         '"authorization": "Bearer sk-ant-api03-aaaaaaaaaaaaaaaaaaaaaaaa"',
         "-----BEGIN RSA PRIVATE KEY-----",
         "DATABASE_URL=postgres://user:hunter2hunter2@db.internal/app",
+        # PHP array entries, as in app/etc/env.php and module code.
+        "'api_key' => '3b9e1f7a0c4d8e2b6a5f9c1d7e3b0a4f8c2d6e1a',",
+        '"client_secret" => "9d4a7c2e1b8f3a6d0c5e9b2f7a4d1c8e3b6f0a5d",',
+        "'access_key' => 'Qm7vK2xR9pL4tN8wZ3cY6hJ1',",
+        "        'password' => 'r8Tq2mVx7LpK4nZw',",
+        # A JSON or Python dict key closes its quote before the colon.
+        '{"token": "c1e8a5f2b9d6c3a0e7b4f1d8a5c2e9b6f3a0d7c4"}',
+        # XML elements, as in a Magento module's etc/config.xml defaults.
+        "<api_key>7f2c9a4e1d6b3f8a5c0e7d2b9f4a1c6e3d8b5a0f</api_key>",
+        "            <client_secret>e5b2d9f6a3c0e7b4d1a8f5c2e9b6d3a0f7c4e1b8</client_secret>",
+        '<password backend_model="Encrypted">h6Wd3pQz9Kx2Lm7v</password>',
+        # Near misses of the path and identifier exclusions that are still secrets.
+        "'client_secret' => 'tR4nQ8vLm2Kx/Zp7Wc3Yh9Jd/Bf6Gs1Na5Ue0Vq',",
+        "'client_secret' => '/Zp7Wc3Yh9Jd/Bf6Gs1Na5Ue0VqtR4nQ8vLm2Kx',",
+        "'password' => 'Blue_Heron_Password_2291',",
     ]
     ignored = [
         'api_key = ""',
@@ -266,6 +298,29 @@ def _self_test() -> int:
         # not carry the word.
         "AWS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
         'aws_secret_access_key = "wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY"',
+        # Placeholders in the PHP array and XML forms.
+        "'password' => '',",
+        "'api_key' => '${MAGENTO_API_KEY}',",
+        "'client_secret' => '%env(CLIENT_SECRET)%',",
+        "'access_key' => 'changeme-access-key',",
+        '"token" => "your-token-goes-here",',
+        "<api_key></api_key>",
+        "<api_key>${API_KEY}</api_key>",
+        "<client_secret>%env(CLIENT_SECRET)%</client_secret>",
+        "<password>example-password-1234</password>",
+        "<token>xxxxxxxxxxxxxxxxxxxx</token>",
+        "'api_key' => '3b9e1f7a0c4d8e2b6a5f9c1d7e3b0a4f8c2d6e1a', // pragma: allowlist secret",
+        "<api_key>7f2c9a4e1d6b3f8a5c0e7d2b9f4a1c6e3d8b5a0f</api_key> <!-- pragma: allowlist secret -->",
+        # Magento values under credential-shaped keys that name something else.
+        "<tokenFormat>Vendor\\Payment\\Model\\TokenFormatter</tokenFormat>",
+        "public const PATH_ACCESS_KEY = 'remote_storage/access_key';",
+        "'Vendor_Customer/change-password': 'Vendor_Customer/js/change-password',",
+        '"passwordSelector": "#current-password,#password,#password-confirmation"',
+        "<reset_password_template>vendor_customer_reset_password_template</reset_password_template>",
+        "'password' => 'catalog_search_opensearch_password',",
+        '"azure_federated_token_file": "/var/run/secrets/azure/token",',
+        '"token_not_after": "20900101010102Z",',
+        '"passwordRevisionDate": "2022-07-26T23:03:23.399Z",',
     ]
     failures = 0
     for line in caught:

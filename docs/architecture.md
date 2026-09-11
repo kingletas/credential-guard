@@ -7,7 +7,7 @@ credential-guard          check_credentials.py
   scan     ─── file list ────▶  patterns ──▶ redacted findings
   history  ─── every blob ──▶
   install  ─── copies ──────▶  (into a repo's scripts/)
-  self-test ──────────────────▶ 22 cases
+  self-test ──────────────────▶ 54 cases
 ```
 
 The split isn't decoration. **The scanner has to be usable on its own**, because that's the half that gets vendored into other repositories — where there's no bash wrapper, no `PATH` entry, and possibly no interest in either.

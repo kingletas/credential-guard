@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **A secret-named key in a PHP array entry or an XML element is now caught.** That covers `'api_key' => '…'` in `app/etc/env.php` or module code, and `<api_key>…</api_key>` in a module's `etc/config.xml`, the two shapes Magento code uses most. Both used to pass. The value is judged by the same rules as an assignment, so an empty value, `${VAR}`, `%env(...)%` or an example value still passes, and `pragma: allowlist secret` still works on either line. `access_key` has joined the names that count as secret-shaped. **Test fixtures written as array entries now fail** the way `$password = '…'` always has: use a placeholder-shaped value or add the pragma.
+
 - **`watch` scans the files that live in no repository.** `scan` covers a working tree, which is where a commit can carry a credential away; nothing covered a shell profile, a git config or an alias file, and that's where two credentials survived for years here. Reads a list from `GUARD_WATCHLIST`, silent when clean, `--notify` raises a critical desktop notification because do-not-disturb is a normal state and an alert that respects it is an alert nobody receives.
 - **A watchlist entry that isn't on disk is reported rather than skipped**, so the list can't quietly stop describing anything.
 - **`watch` batches the scanner rather than passing every path in one call.** A watchlist naming a large directory blew past ARG_MAX at 35,541 files, and the wrapper reported "Argument list too long" **as a credential finding**. A scanner that couldn't run now exits 2 and says nothing was checked, which is a different thing from a scanner that looked and found something.
@@ -18,6 +20,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **A JSON or dict key such as `"api_key": "…"` is caught.** The quote closing the key stopped the match, so this shape passed even though the scanner's own comment listed it as covered.
+- **Values that name something rather than hold a secret no longer fail the scan.** That covers config paths (`payment/gateway/api_key`), absolute paths, PHP class names, `Vendor_Module/…` asset paths, CSS selector lists, timestamps, and lowercase identifiers built around the credential word (`customer_password_reset_template`). Across Magento's own code, that removes 61 findings the scanner used to make on constants such as `XML_PATH_API_KEY`.
+- **The README no longer lists JWTs among the formats it refuses.** The scanner has no JWT pattern and never had one.
 - **`scan` on a subdirectory read no files at all.** Paths came out of `git ls-files --full-name`, which prints them relative to the repository root, and were then joined onto the path argument — so scanning `module-cache-vary` handed the scanner `module-cache-vary/module-cache-vary/…` and every one of the 62 files came back *No such file or directory*. They are resolved against the repository root now, and a subdirectory scan reads the files it lists. The pre-commit hook was never affected: it passes staged files as arguments and never takes the directory path.
 
 ### Changed

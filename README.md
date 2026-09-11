@@ -60,8 +60,8 @@ That **copies** the scanner to `scripts/check_credentials.py` in the target repo
 
 | Kind | Examples |
 |---|---|
-| **Provider key formats** | AWS access keys, Stripe live keys, Slack tokens, GitHub tokens, Twilio SIDs, private-key blocks, JWTs |
-| **Credential-named variables assigned a literal** | `api_key = "…"`, `PASSWORD: "…"`, `secret_token=…` |
+| **Provider key formats** | AWS access keys, Stripe live keys, Slack tokens, GitHub tokens, Twilio SIDs, private-key blocks |
+| **Credential-named keys given a literal** | `api_key = "…"`, `PASSWORD: "…"`, `secret_token=…`, `'api_key' => '…'` in a PHP array, `<api_key>…</api_key>` in XML |
 | **Environment fallbacks with a real value** | `os.environ.get("API_KEY", "sk_live_…")` — the pattern that put ten real keys in a first commit |
 | **Files that should never be committed at all** | `.env`, `*.pem`, `*.key`, `*.db`, `*.sqlite` |
 
@@ -108,11 +108,11 @@ If a key does reach a commit: **rotate it first, then clean the history.** Rewri
 ## Checking the scanner itself
 
 ```bash
-credential-guard self-test    # 22 cases: what it must catch, and what it must not
+credential-guard self-test    # 54 cases: what it must catch, and what it must not
 tests/run.sh                  # end to end, over real temporary repositories
 ```
 
-The self-test is worth running after any change to the patterns. **Half its cases assert what the scanner must _not_ flag** — that half is what keeps the false-positive rate low enough that people leave the hook installed.
+The self-test is worth running after any change to the patterns. **Two in three of its cases assert what the scanner must _not_ flag** — that half is what keeps the false-positive rate low enough that people leave the hook installed.
 
 ## Contributing
 
