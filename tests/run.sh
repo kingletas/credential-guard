@@ -28,7 +28,7 @@ saw()     { if grep -q "$1" <<<"$2"; then ok "$3"; else bad "$3"; fi; }
 saw_not() { if grep -q "$1" <<<"$2"; then bad "$3"; else ok "$3"; fi; }
 
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+trap 'chmod -R u+rwx "$work" 2>/dev/null; rm -rf "$work"' EXIT
 
 # A repository with a real-looking key in a commit that is later "fixed" by
 # deleting the line. This is the shape the history scan exists for.
@@ -142,16 +142,21 @@ check "several clean files pass" "$?" "0"
 check "several files, one holding a credential, fail" "$?" "1"
 
 # --- a directory with more files than fit on one command line ------------
-# Every path is over 500 bytes, so a few thousand files outgrow ARG_MAX.
+# Paths of about 3,700 bytes, so a few hundred files outgrow ARG_MAX.
+seg="$(printf 'd%.0s' {1..250})"
+nest="$seg/$seg/$seg/$seg/$seg/$seg/$seg/$seg/$seg/$seg/$seg/$seg/$seg/$seg"
+long="$(printf 'f%.0s' {1..200})"
+# Succeeds when these arguments cannot be passed to one command.
+too_long() { env true "$@" 2>/dev/null; [[ $? -eq 126 ]]; }
+
 big="$work/big"
-deep="$big/$(printf 'd%.0s' {1..250})"; mkdir -p "$deep"
-long="$(printf 'f%.0s' {1..240})"
-arg_max="$(getconf ARG_MAX)"
-count=$(( arg_max / 500 + 1 ))
+deep="$big/$nest"; mkdir -p "$deep"
+count=$(( $(getconf ARG_MAX) / 3500 + 1 ))
 for (( i = 1; i <= count; i++ )); do printf 'nothing here\n' > "$deep/$long-$i"; done
-bytes="$(find "$big" -type f -print0 | wc -c)"
-if (( bytes > arg_max )); then ok "the fixture's paths alone exceed ARG_MAX"
-else bad "the fixture's paths alone exceed ARG_MAX ($bytes of $arg_max bytes)"; fi
+find "$big" -type f -print0 > "$work/big.list"
+mapfile -d "" -t listed < "$work/big.list"
+if too_long "${listed[@]}"; then ok "the fixture's paths do not fit on one command line"
+else bad "the fixture's paths do not fit on one command line"; fi
 git -C "$big" rev-parse >/dev/null 2>&1
 check "and it sits outside any git repository, so find walks it" "$?" "128"
 
@@ -164,7 +169,52 @@ printf 'api_key = "sk_live_9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"\n' > "$big/planted.
 out="$("$GUARD" scan "$big" 2>&1)"; rc=$?
 check "a credential among them is still found" "$rc" "1"
 saw   "big/planted.php" "$out" "and the finding names the file"
-rm -rf "$big"
+rm -f "$big/planted.php"
+
+# --- a directory that cannot be read fails the scan ----------------------
+# Root reads every directory regardless of its mode, so the case cannot arise.
+locked="$work/locked"
+mkdir -p "$locked/open" "$locked/shut"
+printf 'nothing here\n' > "$locked/open/a.txt"
+printf 'nothing here\n' > "$locked/shut/b.txt"
+chmod 000 "$locked/shut"
+if [[ -r "$locked/shut" ]]; then
+  echo "  skip an unreadable directory fails the scan (running as root)"
+else
+  out="$("$GUARD" scan "$locked" 2>&1)"; rc=$?
+  check "a tree with an unreadable directory fails" "$rc" "1"
+  saw   "could not be read" "$out" "and says part of it was not checked"
+fi
+
+# --- history of more blobs than fit on one command line ------------------
+# A 1 MB stack lowers ARG_MAX to 256 KB, so under a hundred blobs exceed it.
+repo4="$work/repo4"
+deep4="$repo4/$nest"; mkdir -p "$deep4"
+git -C "$repo4" init -q
+git -C "$repo4" config user.email t@example.com
+git -C "$repo4" config user.name Test
+small_max="$(ulimit -s 1024; getconf ARG_MAX)"
+for (( i = 1; i <= small_max / 3500 + 1; i++ )); do
+  printf 'blob %s\n' "$i" > "$deep4/$long-$i"
+done
+git -C "$repo4" add -A && git -C "$repo4" commit -qm "many blobs"
+git -C "$repo4" ls-files -z > "$work/repo4.list"
+mapfile -d "" -t listed < "$work/repo4.list"
+if (ulimit -s 1024; too_long "${listed[@]}"); then ok "the blob paths do not fit on one command line"
+else bad "the blob paths do not fit on one command line"; fi
+unset listed
+
+out="$(ulimit -s 1024; "$GUARD" history "$repo4" 2>&1)"; rc=$?
+check   "history of more blobs than fit on one command line passes" "$rc" "0"
+saw     "history clean" "$out" "and says so"
+saw_not "too long"      "$out" "without hitting the argument limit"
+
+printf 'api_key = "sk_live_9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"\n' > "$repo4/planted.php"  # pragma: allowlist secret
+git -C "$repo4" add -A && git -C "$repo4" commit -qm "a leak among many blobs"
+out="$(ulimit -s 1024; "$GUARD" history "$repo4" 2>&1)"; rc=$?
+check   "and a credential among them is still found" "$rc" "1"
+saw     "planted.php"   "$out" "and the finding names the file"
+saw_not "history clean" "$out" "and history is not called clean"
 
 # --- a scanner that could not run is its own error, never a finding ------
 out="$(GUARD_SCANNER="$work/no-such-scanner.py" "$GUARD" scan "$repo3/top.php" 2>&1)"; rc=$?
@@ -176,6 +226,10 @@ out="$(GUARD_SCANNER="$work/killed.py" "$GUARD" scan "$repo3/module" 2>&1)"; rc=
 check   "a scanner killed mid-run exits 2"  "$rc" "2"
 saw     "could not be run"        "$out" "and says nothing was checked"
 saw_not "looks like a credential" "$out" "and does not call it a finding"
+
+out="$(GUARD_SCANNER="$work/killed.py" "$GUARD" history "$repo" 2>&1)"; rc=$?
+check   "history with a killed scanner exits 2" "$rc" "2"
+saw_not "history clean" "$out" "and is not called clean"
 
 out="$(PYTHONDONTWRITEBYTECODE=1 python3 -c '
 import sys
@@ -264,19 +318,26 @@ printf '%s/globdir\n' "$wdir" > "$list"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
 check "a directory named outright is still walked"      "$?" "1"
 
-# A watchlist that names a large directory must not blow past ARG_MAX. Handing
-# every path to the scanner in one call failed with "Argument list too long" --
-# and the wrapper called that a credential. A scanner that could not run has to
-# read differently from a scanner that found something.
-mkdir -p "$wdir/many"
-for i in $(seq 1 3000); do printf 'nothing here\n' > "$wdir/many/file-with-a-fairly-long-name-$i"; done
-printf '%s\n' "$wdir/many" > "$list"
+# The same fixture the scan tests proved is over ARG_MAX.
+printf '%s\n' "$big" > "$list"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
-check "three thousand files are scanned in batches" "$?" "0"
-cp "$wdir/dirty-profile" "$wdir/many/tainted"
+check "a watched directory too large for one command line passes" "$?" "0"
+cp "$wdir/dirty-profile" "$big/tainted"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
 check "and a credential among them is still found"  "$?" "1"
-rm -rf "$wdir/many"
+rm -rf "$big"
+
+if [[ ! -r "$locked/shut" ]]; then
+  printf '%s\n' "$locked" > "$list"
+  out="$(GUARD_WATCHLIST="$list" "$GUARD" watch 2>&1)"; rc=$?
+  check "a watched directory that cannot be read in full fails" "$rc" "1"
+  saw   "not readable in full" "$out" "and names it"
+fi
+
+printf '%s\n' "$wdir/clean-profile" > "$list"
+out="$(GUARD_SCANNER="$work/killed.py" GUARD_WATCHLIST="$list" "$GUARD" watch 2>&1)"; rc=$?
+check   "watch with a killed scanner exits 2" "$rc" "2"
+saw_not "should not hold one" "$out" "and does not call it a finding"
 
 printf '%s\n' "$work/no-such-dir/*" > "$list"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
