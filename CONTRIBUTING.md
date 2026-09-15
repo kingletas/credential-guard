@@ -12,7 +12,7 @@ bin/check_credentials.py --self-test
 tests/run.sh
 ```
 
-There's nothing to install. `bash`, `python3` and `git` are all it needs, and `shellcheck` if you're touching the shell half.
+`bash`, `python3` and `git` are all the tool needs. `make check` also needs `shellcheck`, and fails rather than skipping when it is missing. A linter that did not run is not a linter that passed.
 
 Before you send a change, run the same gate CI runs:
 

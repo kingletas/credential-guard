@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # make lint skips shellcheck when it is missing, so it is installed here.
+      # make lint fails when shellcheck is missing, so it is installed here.
       - name: Install shellcheck
         run: sudo apt-get update -qq && sudo apt-get install -y shellcheck
 
@@ -47,6 +47,9 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+
+      - name: Install shellcheck
+        run: brew install shellcheck
 
       # macOS ships BSD find and xargs, which the hook and watch both call.
       - name: make check

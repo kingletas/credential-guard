@@ -346,5 +346,41 @@ check "a glob matching nothing fails rather than passing" "$?" "1"
 GUARD_WATCHLIST="$work/no-such-list" "$GUARD" watch >/dev/null 2>&1
 check "no watchlist at all is a usage error"     "$?" "2"
 
+# --- the linter runner ------------------------------------------------------
+#
+# A linter that cannot be found has to FAIL rather than skip. A skip that still
+# exits 0 lets `make check` print "lint and tests pass" over a lane nothing
+# looked at. Stand-ins are used rather than real linters, so this suite does
+# not itself depend on one being installed.
+
+LINT_TOOL="$HERE/scripts/lint-tool"
+lintbin="$(mktemp -d)"
+printf '#!/bin/sh\nexit 0\n' > "$lintbin/uvx"
+chmod +x "$lintbin/uvx"
+
+"$LINT_TOOL" true anything >/dev/null 2>&1
+check "a linter that runs clean passes" "$?" "0"
+
+"$LINT_TOOL" false anything >/dev/null 2>&1
+check "a linter that reports a problem fails" "$?" "1"
+
+out=$("$LINT_TOOL" no-such-linter anything 2>&1); status=$?
+check "a missing linter fails" "$status" "1"
+saw "not installed, so this check did not run" "$out" "and says it did not run"
+
+"$LINT_TOOL" true >/dev/null 2>&1
+check "a linter given nothing to check is refused" "$?" "2"
+
+# /usr/bin:/bin is a PATH with neither ruff nor uv on it, so these two decide
+# the fallback rather than whatever this machine happens to have installed.
+out=$(PATH="$lintbin:/usr/bin:/bin" "$LINT_TOOL" ruff check . 2>&1); status=$?
+check "ruff is reached through uv when it is not on PATH" "$status" "0"
+saw "via uvx" "$out" "and the route it took is reported"
+
+PATH="/usr/bin:/bin" "$LINT_TOOL" ruff check . >/dev/null 2>&1
+check "ruff with no uv either is a failure, not a skip" "$?" "1"
+
+rm -rf "$lintbin"
+
 echo "credential-guard tests: $passed passed$([[ $failed -gt 0 ]] && echo ", $failed FAILED")"
 [[ $failed -eq 0 ]]
