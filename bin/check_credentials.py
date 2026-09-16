@@ -79,9 +79,15 @@ ISSUED = [
     ("Slack token", re.compile(r"\bxox[abprs]-[0-9A-Za-z\-]{10,}")),
     (
         "Slack webhook URL",
-        re.compile(r"hooks\.slack\.com/(?:services|workflows|triggers)/T[A-Z0-9]+/[A-Za-z0-9]+/[A-Za-z0-9]{16,}"),
+        re.compile(
+            r"hooks\.slack\.com/(?:services|workflows|triggers)/"
+            r"T[A-Z0-9]+/[A-Za-z0-9]+/[A-Za-z0-9]{16,}"
+        ),
     ),
-    ("Discord webhook URL", re.compile(r"discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_\-]{50,}")),
+    (
+        "Discord webhook URL",
+        re.compile(r"discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_\-]{50,}"),
+    ),
     ("Telegram bot token", re.compile(r"\b\d{8,10}:AA[A-Za-z0-9_\-]{33}\b")),
     ("Atlassian API token", re.compile(r"\bATATT3[A-Za-z0-9_\-=]{50,}")),
     ("Bitbucket app password", re.compile(r"\bATBB[A-Za-z0-9]{28,}")),
@@ -110,16 +116,17 @@ ISSUED = [
 # whose `\b` did not match beside an underscore, so `aws_secret_access_key = …`
 # passed it. Underscores are word characters; `\bsecret\b` cannot see one that
 # has a word character on both sides.
-_WORDS = r"api_?key|access_?key|license_?key|install_?key|secret|token|passwd|password|auth|credential"
+_WORDS = (
+    r"api_?key|access_?key|license_?key|install_?key"
+    r"|secret|token|passwd|password|auth|credential"
+)
 SECRET_NAME = rf"[A-Za-z0-9_.\-]*(?:{_WORDS})[A-Za-z0-9_.\-]*"
 
 ASSIGNED = [
     # api_key = "…"  /  "api_key": "…"  /  api_key: "…"  /  'api_key' => '…'
     (
         "credential assigned a literal",
-        re.compile(
-            rf"""(?i)\b{SECRET_NAME}["']?\s*(?:=>|[:=])\s*["']([^"'\n]{{12,}})["']"""
-        ),
+        re.compile(rf"""(?i)\b{SECRET_NAME}["']?\s*(?:=>|[:=])\s*["']([^"'\n]{{12,}})["']"""),
     ),
     # <api_key>…</api_key>, as in a Magento module's etc/config.xml defaults.
     (
@@ -143,8 +150,11 @@ ASSIGNED = [
         "credential assigned unquoted",
         re.compile(
             r"""(?<![A-Za-z0-9_$.\-])(?:[A-Z0-9]+_)*"""
-            r"""(?:API_?KEY|ACCESS_?KEY|LICENSE_?KEY|INSTALL_?KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASS|CREDENTIALS?)"""
-            r"""(?:_[A-Z0-9]+)*(?<!_ID)(?<!_REF)(?<!_ARN)(?<!_URL)(?<!_URI)(?<!_FILE)(?<!_PATH)(?<!_NAME)(?<!_TYPE)"""
+            r"""(?:API_?KEY|ACCESS_?KEY|LICENSE_?KEY|INSTALL_?KEY"""
+            r"""|SECRET|TOKEN|PASSWORD|PASSWD|PASS|CREDENTIALS?)"""
+            r"""(?:_[A-Z0-9]+)*"""
+            r"""(?<!_ID)(?<!_REF)(?<!_ARN)(?<!_URL)(?<!_URI)"""
+            r"""(?<!_FILE)(?<!_PATH)(?<!_NAME)(?<!_TYPE)"""
             r"""=(?![=\s"'$<{%])([^\s"'`;&|<>(){}\[\],]{12,})"""
         ),
     ),
@@ -165,7 +175,8 @@ ASSIGNED = [
 YAML_LINE = (
     "credential in a YAML value",
     re.compile(
-        rf"""(?im)^\s*(?:-\s+)?["']?{SECRET_NAME}["']?\s*:\s+(?![\s"'#&*!|>{{\[%$<])([^\s#]{{12,}})\s*$"""
+        rf"""(?im)^\s*(?:-\s+)?["']?{SECRET_NAME}["']?\s*:\s+"""
+        r"""(?![\s"'#&*!|>{\[%$<])([^\s#]{12,})\s*$"""
     ),
 )
 YAML_FILES = re.compile(r"(?i)\.ya?ml$")
@@ -217,10 +228,12 @@ NOT_SECRET_VALUE = re.compile(
       | .*[()\[\]{}].*                            # an expression or f-string
       | [A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+   # dotted.attribute.path
       | \\?[A-Za-z_][A-Za-z0-9_]*(\\[A-Za-z_][A-Za-z0-9_]*)+  # Vendor\Php\ClassName
-      | (?-i:(/?[a-z][a-z0-9_.\-]*|[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9]*)(/[a-z0-9_.\-]+)+)  # config/path, /abs/path, Vendor_Module/asset
+      # config/path, /abs/path, Vendor_Module/asset
+      | (?-i:(/?[a-z][a-z0-9_.\-]*|[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9]*)(/[a-z0-9_.\-]+)+)
       | \d{4}-?\d{2}-?\d{2}(T?\d{2}:?\d{2}(:?\d{2}(\.\d+)?)?)?(Z|[+\-]\d{2}:?\d{2})?  # a timestamp
       | \#[A-Za-z][\w\-]*(,\#[A-Za-z][\w\-]*)+    # a CSS selector list
-      | \d+:[0-3]:([A-Za-z0-9+/=]+:)?[A-Za-z0-9+/\\]+={0,2}  # Magento ciphertext, key:cipher[:iv]:base64
+      # Magento ciphertext, key:cipher[:iv]:base64
+      | \d+:[0-3]:([A-Za-z0-9+/=]+:)?[A-Za-z0-9+/\\]+={0,2}
       | .*\.(json|txt|py|md|ya?ml|toml|cfg|ini|db|log|pem)  # a filename
       | https?://.*
     )$"""
@@ -266,7 +279,8 @@ def scan_text(path: str, text: str) -> list[str]:
         seen: set[str] = set()
         for label, pattern in ISSUED:
             match = pattern.search(line)
-            if not match or any(match.group(0) in known or known in match.group(0) for known in seen):
+            found = match.group(0) if match else ""
+            if not match or any(found in known or known in found for known in seen):
                 continue
             if not PLACEHOLDER.match(match.group(0)):
                 seen.add(match.group(0))
@@ -370,13 +384,16 @@ def _self_test() -> int:
         "docker login -u me -p dckr_pat_CJbW56eCuNGMG" + "mSrCGIZEG8pSH4",
         "hf_487q7J58m1CiAhzCu" + "eQpBenQtYh5Xj8TPQ",
         "bot 123456789:AAxjq4i9DoV8gz4Fk" + "Q1okTBGzvAmwufUxbv",
-        "https://discord.com/api/webhooks/877065894811311440/5XlrWi0B26R08qzjI6GKFSufrdZSlB5er8" + "bOfZqfM2oeq3hDavJA76rNicHTp8hkqdlm",
-        "DefaultEndpointsProtocol=https;AccountName=store;AccountKey=7tOtHWnsCGRlrwZbqcabUGJmGEp7CgQ0PBQFI14zGtS" + "novm14TUOizwd1iaeOV4qBkdfQ1y3GQsMpSscDlkrCa==",
+        "https://discord.com/api/webhooks/877065894811311440/5XlrWi0B26R08qzjI6GKFSufrdZSlB5er8"
+        + "bOfZqfM2oeq3hDavJA76rNicHTp8hkqdlm",
+        "DefaultEndpointsProtocol=https;AccountName=store;"
+        + "AccountKey=7tOtHWnsCGRlrwZbqcabUGJmGEp7CgQ0PBQFI14zGtS"
+        + "novm14TUOizwd1iaeOV4qBkdfQ1y3GQsMpSscDlkrCa==",
         "-----BEGIN PGP PRIVATE KEY BLOCK-----",
         "-----BEGIN OPENSSH PRIVATE KEY-----",
         "PuTTY-User-Key-File-3: ssh-ed25519",
         # Unquoted, inside a command or a note rather than alone on a .env line.
-        "sudo NEW_RELIC_API_KEY=Zq8vL3mK7xR2wP5nT4 NEW_RELIC_ACCOUNT_ID=1234 /usr/local/bin/newrelic install",
+        "sudo NEW_RELIC_API_KEY=Zq8vL3mK7xR2wP5nT4 NEW_RELIC_ACCOUNT_ID=1234 newrelic install",
         "docker run -e DB_PASSWORD=Zq8vL3mK7xR2wP5n app",
         "RUN NR_INSTALL_KEY=Zq8vL3mK7xR2wP5nT4 ./install.sh",
         "mysql --password=Zq8vL3mK7 -e 'select 1'",
@@ -429,13 +446,19 @@ def _self_test() -> int:
         "<password>example-password-1234</password>",
         "<token>xxxxxxxxxxxxxxxxxxxx</token>",
         "'api_key' => '3b9e1f7a0c4d8e2b6a5f9c1d7e3b0a4f8c2d6e1a', // pragma: allowlist secret",
-        "<api_key>7f2c9a4e1d6b3f8a5c0e7d2b9f4a1c6e3d8b5a0f</api_key> <!-- pragma: allowlist secret -->",
+        (
+            "<api_key>7f2c9a4e1d6b3f8a5c0e7d2b9f4a1c6e3d8b5a0f</api_key>"
+            " <!-- pragma: allowlist secret -->"
+        ),
         # Magento values under credential-shaped keys that name something else.
         "<tokenFormat>Vendor\\Payment\\Model\\TokenFormatter</tokenFormat>",
         "public const PATH_ACCESS_KEY = 'remote_storage/access_key';",
         "'Vendor_Customer/change-password': 'Vendor_Customer/js/change-password',",
         '"passwordSelector": "#current-password,#password,#password-confirmation"',
-        "<reset_password_template>vendor_customer_reset_password_template</reset_password_template>",
+        (
+            "<reset_password_template>vendor_customer_reset_password_template"
+            "</reset_password_template>"
+        ),
         "'password' => 'catalog_search_opensearch_password',",
         '"azure_federated_token_file": "/var/run/secrets/azure/token",',
         '"token_not_after": "20900101010102Z",',
@@ -463,7 +486,7 @@ def _self_test() -> int:
         'mysql --password="$DB_PASSWORD"',
         "cache-key-5f4dcc3b5aa765d61d8327deb882cf99",
         "//registry.npmjs.org/:_authToken=${NPM_TOKEN}",
-        "if [ \"$API_TOKEN\" == \"\" ]; then exit 1; fi",
+        'if [ "$API_TOKEN" == "" ]; then exit 1; fi',
     ]
     cases = [("t", line, True) for line in caught]
     cases += [("t", line, False) for line in ignored]
@@ -487,6 +510,7 @@ def _self_test() -> int:
 
 
 FILES_FROM = "--files0-from"
+FILES_FROM_ARGC = 2  # the option and its LIST
 
 
 def _names_from(source: str) -> list[str]:
@@ -500,7 +524,7 @@ def main(argv: list[str]) -> int:
         return _self_test()
     paths = argv
     if argv[:1] == [FILES_FROM]:
-        if len(argv) != 2:
+        if len(argv) != FILES_FROM_ARGC:
             print(f"{SELF_NAME}: {FILES_FROM} takes one LIST and no files", file=sys.stderr)
             return 2
         try:
