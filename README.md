@@ -60,10 +60,11 @@ That **copies** the scanner to `scripts/check_credentials.py` in the target repo
 
 | Kind | Examples |
 |---|---|
-| **Provider key formats** | AWS access keys, Stripe live keys, Slack tokens, GitHub tokens, Twilio SIDs, private-key blocks |
+| **Provider key formats** | AWS, Azure storage, Google API and OAuth, OpenAI and Anthropic, GitHub, GitLab, Atlassian and Bitbucket, New Relic API and license keys, Slack tokens and webhooks, Discord webhooks, Telegram bots, Stripe, Shopify, Twilio, SendGrid, Mailgun, npm, PyPI, Docker Hub, Hugging Face, and private-key blocks including PGP and PuTTY |
 | **Credential-named keys given a literal** | `api_key = "…"`, `PASSWORD: "…"`, `secret_token=…`, `'api_key' => '…'` in a PHP array, `<api_key>…</api_key>` in XML |
+| **Unquoted values, wherever they sit** | `sudo NEW_RELIC_API_KEY=… newrelic install` in a note or a Dockerfile, `--password=…` on a command line, `db_password: …` in YAML |
 | **Environment fallbacks with a real value** | `os.environ.get("API_KEY", "sk_live_…")` — the pattern that put ten real keys in a first commit |
-| **Files that should never be committed at all** | `.env`, `*.pem`, `*.key`, `*.db`, `*.sqlite` |
+| **Files that should never be committed at all** | `.env`, `*.pem`, `*.key`, `*.db`, `*.sqlite`, `.git-credentials`, `.netrc`, `.pgpass`, `.htpasswd` |
 
 **A match is reported redacted to its first four characters**, so the error message doesn't leak what the commit would have.
 

@@ -46,6 +46,21 @@ git -C "$repo" add -A && git -C "$repo" commit -qm "clean"
 "$GUARD" scan "$repo" >/dev/null 2>&1
 check "a clean tree passes" "$?" "0"
 
+# --- a key pasted into a note, unquoted, inside a command ------------------
+notes="$work/notes"
+mkdir -p "$notes"
+# The key is split so a host's own secret scanning does not take the specimen for a real one.
+printf '# Install\n\n    sudo NEW_RELIC_API_KEY=%s%s newrelic install\n' 'NRAK' '-UJZDE8GXD6NCF10EPF91DHODZDO' > "$notes/install.md"
+out="$("$GUARD" scan "$notes" 2>&1)"
+check "a key inside a command in a Markdown note fails the scan" "$?" "1"
+saw "install.md:3: New Relic API key" "$out" "the finding names the file, the line and the provider"
+saw_not "credential assigned unquoted" "$out" "the same key is reported once, not once per rule"
+# The dollar sign is literal on purpose: the note reads the key from the environment.
+# shellcheck disable=SC2016
+printf '# Install\n\n    sudo NEW_RELIC_API_KEY=$NEW_RELIC_API_KEY newrelic install\n' > "$notes/install.md"
+"$GUARD" scan "$notes" >/dev/null 2>&1
+check "the same command reading the key from the environment passes" "$?" "0"
+
 # --- history: a key added and later removed is STILL in the repository ----
 # Not AKIAIOSFODNN7EXAMPLE: that is AWS's own documented example key and the
 # scanner treats it as a placeholder, correctly. This is a shape it refuses.
