@@ -290,6 +290,20 @@ check "watch fails on a credential"              "$rc" "1"
 saw "dirty-profile" "$out" "and names the file it found it in"
 saw "should not hold one" "$out" "and says what is wrong"
 
+# A file too large to scan fails the run, but it is not a credential and the
+# report must not call it one.
+truncate -s 21M "$wdir/huge-binary"
+printf '%s\n%s\n' "$wdir/huge-binary" "$wdir/clean-profile" > "$list"
+out="$(GUARD_WATCHLIST="$list" "$GUARD" watch 2>&1)"; rc=$?
+check   "watch fails on a file it could not scan"    "$rc" "1"
+saw     "could not be scanned" "$out" "and says the file was not scanned"
+saw_not "should not hold one"  "$out" "and does not report a credential"
+
+printf '%s\n%s\n' "$wdir/huge-binary" "$wdir/dirty-profile" > "$list"
+out="$(GUARD_WATCHLIST="$list" "$GUARD" watch 2>&1)"
+saw "should not hold one" "$out" "a credential beside an unscannable file is still reported as a credential"
+rm -f "$wdir/huge-binary"
+
 printf '# a comment\n\n%s\n' "$wdir/clean-profile" > "$list"
 GUARD_WATCHLIST="$list" "$GUARD" watch >/dev/null 2>&1
 check "comments and blank lines are skipped"     "$?" "0"
