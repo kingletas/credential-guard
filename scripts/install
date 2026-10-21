@@ -9,6 +9,9 @@
 # credential-guard.d/, which is where the command looks for it; `credential-
 # guard install <repo>` then vendors a copy from there into a repository,
 # because a contributor who clones that repo does not have your ~/bin.
+#
+# Only the command and the scanner are written. A file this tool does not
+# ship, such as a watchlist kept in credential-guard.d, survives a reinstall.
 
 set -euo pipefail
 usage() { sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
