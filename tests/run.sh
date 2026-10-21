@@ -411,5 +411,25 @@ check "ruff with no uv either is a failure, not a skip" "$?" "1"
 
 rm -rf "$lintbin"
 
+# --- install ----------------------------------------------------------------
+# The install writes only the files it ships. A watchlist, or anything else a
+# user keeps beside the scanner, survives a reinstall; the scanner itself is
+# replaced, or a fix would never reach an installed copy.
+prefix="$work/prefix"
+mkdir -p "$prefix"
+"$HERE/scripts/install" "$prefix" >/dev/null 2>&1
+check "install gives a fresh prefix the command and the scanner" \
+  "$([[ -x "$prefix/credential-guard" && -f "$prefix/credential-guard.d/check_credentials.py" ]] && echo yes)" "yes"
+printf '%s\n' "$work/repo/settings.env" > "$prefix/credential-guard.d/watchlist"
+printf 'stale\n' > "$prefix/credential-guard.d/check_credentials.py"
+"$HERE/scripts/install" "$prefix" >/dev/null 2>&1
+check "reinstalling leaves a watchlist the tool does not ship" \
+  "$(cat "$prefix/credential-guard.d/watchlist")" "$work/repo/settings.env"
+if cmp -s "$HERE/bin/check_credentials.py" "$prefix/credential-guard.d/check_credentials.py"; then
+  ok "reinstalling still replaces the scanner it ships"
+else
+  bad "reinstalling left a stale copy of the scanner"
+fi
+
 echo "credential-guard tests: $passed passed$([[ $failed -gt 0 ]] && echo ", $failed FAILED")"
 [[ $failed -eq 0 ]]
